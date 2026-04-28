@@ -19,6 +19,7 @@ class Run(BaseModel):
     status: str  # running | completed | error
     title: Optional[str]
     summary: Optional[str]
+    run_input: dict  # {"text": "...", "files": [...]}
     created_at: int
     updated_at: int
 

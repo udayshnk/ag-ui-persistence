@@ -51,6 +51,7 @@ CREATE TABLE IF NOT EXISTS agui_runs (
     status          TEXT NOT NULL,
     title           TEXT,
     summary         TEXT,
+    run_input       JSONB,
     created_at      BIGINT NOT NULL,
     updated_at      BIGINT NOT NULL
 );
@@ -197,6 +198,7 @@ class AGUIPersistence:
         thread_id: str,
         run_id: str,
         parent_run_id: Optional[str],
+        run_input: dict,
         title: Optional[str] = None,
         status: str = "running",
         namespace: Optional[str] = None,
@@ -225,10 +227,10 @@ class AGUIPersistence:
             await conn.execute(
                 text(
                     "INSERT INTO agui_runs "
-                    "(run_id, thread_id, parent_run_id, previous_run_id, seq, status, title, summary, created_at, updated_at) "
+                    "(run_id, thread_id, parent_run_id, previous_run_id, seq, status, title, summary, run_input, created_at, updated_at) "
                     "VALUES (:rid, :tid, :prid, :prev_rid, "
                     "(SELECT COUNT(*) FROM agui_runs WHERE thread_id = :tid), "
-                    ":status, :title, NULL, :now, :now) "
+                    ":status, :title, NULL, CAST(:run_input AS JSONB), :now, :now) "
                     "ON CONFLICT (run_id) DO NOTHING"
                 ),
                 {
@@ -238,6 +240,7 @@ class AGUIPersistence:
                     "prev_rid": previous_run_id,
                     "status": status,
                     "title": title,
+                    "run_input": json.dumps(run_input),
                     "now": now,
                 },
             )
@@ -416,7 +419,7 @@ class AGUIPersistence:
                 text(
                     "SELECT agui_runs.run_id, agui_runs.thread_id, agui_runs.parent_run_id, "
                     "agui_runs.previous_run_id, agui_runs.seq, agui_runs.status, agui_runs.title, "
-                    "agui_runs.summary, agui_runs.created_at, agui_runs.updated_at "
+                    "agui_runs.summary, agui_runs.run_input, agui_runs.created_at, agui_runs.updated_at "
                     f"FROM agui_runs{join} {where}{namespace_filter} "
                     "ORDER BY agui_runs.created_at DESC LIMIT :limit"
                 ),
@@ -432,8 +435,9 @@ class AGUIPersistence:
                     status=r[5],
                     title=r[6],
                     summary=r[7],
-                    created_at=r[8],
-                    updated_at=r[9],
+                    run_input=r[8],
+                    created_at=r[9],
+                    updated_at=r[10],
                 )
                 for r in result
             ]
@@ -452,7 +456,7 @@ class AGUIPersistence:
                 text(
                     "SELECT agui_runs.run_id, agui_runs.thread_id, agui_runs.parent_run_id, "
                     "agui_runs.previous_run_id, agui_runs.seq, agui_runs.status, agui_runs.title, "
-                    "agui_runs.summary, agui_runs.created_at, agui_runs.updated_at "
+                    "agui_runs.summary, agui_runs.run_input, agui_runs.created_at, agui_runs.updated_at "
                     f"FROM agui_runs{join} WHERE agui_runs.run_id = :rid{namespace_filter}"
                 ),
                 params,
@@ -469,8 +473,9 @@ class AGUIPersistence:
                 status=r[5],
                 title=r[6],
                 summary=r[7],
-                created_at=r[8],
-                updated_at=r[9],
+                run_input=r[8],
+                created_at=r[9],
+                updated_at=r[10],
             )
 
     async def delete_thread(self, thread_id: str, namespace: Optional[str] = None) -> bool:

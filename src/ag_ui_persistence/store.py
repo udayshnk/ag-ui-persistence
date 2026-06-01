@@ -381,6 +381,48 @@ class AGUIPersistence:
                 for r in result
             ]
 
+    async def get_all_runs(
+        self,
+        thread_id: str,
+        namespace: Optional[str] = None,
+    ) -> list[Run]:
+        self._ensure_open()
+        async with self._engine.connect() as conn:
+            params: dict = {"tid": thread_id}
+            join = ""
+            namespace_filter = ""
+            if namespace is not None:
+                join = " JOIN agui_threads t ON t.thread_id = agui_runs.thread_id"
+                namespace_filter = " AND t.namespace = :ns"
+                params["ns"] = namespace
+            result = await conn.execute(
+                text(
+                    "SELECT agui_runs.run_id, agui_runs.thread_id, agui_runs.parent_run_id, "
+                    "agui_runs.previous_run_id, agui_runs.seq, agui_runs.status, agui_runs.title, "
+                    "agui_runs.summary, agui_runs.run_input, agui_runs.created_at, agui_runs.updated_at "
+                    f"FROM agui_runs{join} "
+                    f"WHERE agui_runs.thread_id = :tid{namespace_filter} "
+                    "ORDER BY agui_runs.created_at ASC"
+                ),
+                params,
+            )
+            return [
+                Run(
+                    run_id=r[0],
+                    thread_id=r[1],
+                    parent_run_id=r[2],
+                    previous_run_id=r[3],
+                    seq=r[4],
+                    status=r[5],
+                    title=r[6],
+                    summary=r[7],
+                    run_input=r[8],
+                    created_at=r[9],
+                    updated_at=r[10],
+                )
+                for r in result
+            ]
+
     async def get_runs(
         self,
         thread_id: str,

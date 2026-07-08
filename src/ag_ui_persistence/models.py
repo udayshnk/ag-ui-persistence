@@ -18,6 +18,7 @@ class Run(BaseModel):
     seq: int
     status: str  # running | completed | error
     title: Optional[str]
+    agent_id: Optional[str] = None
     summary: Optional[str]
     run_input: dict  # {"text": "...", "files": [...]}
     created_at: int

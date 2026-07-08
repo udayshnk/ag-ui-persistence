@@ -50,6 +50,7 @@ CREATE TABLE IF NOT EXISTS agui_runs (
     seq             INTEGER NOT NULL,
     status          TEXT NOT NULL,
     title           TEXT,
+    agent_id        TEXT,
     summary         TEXT,
     run_input       JSONB,
     created_at      BIGINT NOT NULL,
@@ -200,6 +201,7 @@ class AGUIPersistence:
         parent_run_id: Optional[str],
         run_input: dict,
         title: Optional[str] = None,
+        agent_id: Optional[str] = None,
         status: str = "running",
         namespace: Optional[str] = None,
     ) -> None:
@@ -227,10 +229,10 @@ class AGUIPersistence:
             await conn.execute(
                 text(
                     "INSERT INTO agui_runs "
-                    "(run_id, thread_id, parent_run_id, previous_run_id, seq, status, title, summary, run_input, created_at, updated_at) "
+                    "(run_id, thread_id, parent_run_id, previous_run_id, seq, status, title, agent_id, summary, run_input, created_at, updated_at) "
                     "VALUES (:rid, :tid, :prid, :prev_rid, "
                     "(SELECT COUNT(*) FROM agui_runs WHERE thread_id = :tid), "
-                    ":status, :title, NULL, CAST(:run_input AS JSONB), :now, :now) "
+                    ":status, :title, :agent_id, NULL, CAST(:run_input AS JSONB), :now, :now) "
                     "ON CONFLICT (run_id) DO NOTHING"
                 ),
                 {
@@ -240,6 +242,7 @@ class AGUIPersistence:
                     "prev_rid": previous_run_id,
                     "status": status,
                     "title": title,
+                    "agent_id": agent_id,
                     "run_input": json.dumps(run_input),
                     "now": now,
                 },
@@ -399,7 +402,8 @@ class AGUIPersistence:
                 text(
                     "SELECT agui_runs.run_id, agui_runs.thread_id, agui_runs.parent_run_id, "
                     "agui_runs.previous_run_id, agui_runs.seq, agui_runs.status, agui_runs.title, "
-                    "agui_runs.summary, agui_runs.run_input, agui_runs.created_at, agui_runs.updated_at "
+                    "agui_runs.summary, agui_runs.run_input, agui_runs.created_at, agui_runs.updated_at, "
+                    "agui_runs.agent_id "
                     f"FROM agui_runs{join} "
                     f"WHERE agui_runs.thread_id = :tid{namespace_filter} "
                     "ORDER BY agui_runs.created_at ASC"
@@ -419,6 +423,7 @@ class AGUIPersistence:
                     run_input=r[8],
                     created_at=r[9],
                     updated_at=r[10],
+                    agent_id=r[11],
                 )
                 for r in result
             ]
@@ -461,7 +466,8 @@ class AGUIPersistence:
                 text(
                     "SELECT agui_runs.run_id, agui_runs.thread_id, agui_runs.parent_run_id, "
                     "agui_runs.previous_run_id, agui_runs.seq, agui_runs.status, agui_runs.title, "
-                    "agui_runs.summary, agui_runs.run_input, agui_runs.created_at, agui_runs.updated_at "
+                    "agui_runs.summary, agui_runs.run_input, agui_runs.created_at, agui_runs.updated_at, "
+                    "agui_runs.agent_id "
                     f"FROM agui_runs{join} {where}{namespace_filter} "
                     "ORDER BY agui_runs.created_at DESC LIMIT :limit"
                 ),
@@ -480,6 +486,7 @@ class AGUIPersistence:
                     run_input=r[8],
                     created_at=r[9],
                     updated_at=r[10],
+                    agent_id=r[11],
                 )
                 for r in result
             ]
@@ -498,7 +505,8 @@ class AGUIPersistence:
                 text(
                     "SELECT agui_runs.run_id, agui_runs.thread_id, agui_runs.parent_run_id, "
                     "agui_runs.previous_run_id, agui_runs.seq, agui_runs.status, agui_runs.title, "
-                    "agui_runs.summary, agui_runs.run_input, agui_runs.created_at, agui_runs.updated_at "
+                    "agui_runs.summary, agui_runs.run_input, agui_runs.created_at, agui_runs.updated_at, "
+                    "agui_runs.agent_id "
                     f"FROM agui_runs{join} WHERE agui_runs.run_id = :rid{namespace_filter}"
                 ),
                 params,
@@ -518,6 +526,7 @@ class AGUIPersistence:
                 run_input=r[8],
                 created_at=r[9],
                 updated_at=r[10],
+                agent_id=r[11],
             )
 
     async def delete_thread(self, thread_id: str, namespace: Optional[str] = None) -> bool:

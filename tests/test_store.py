@@ -23,7 +23,7 @@ async def store():
 
 @pytest.mark.asyncio
 async def test_put_and_get_thread(store):
-    await store.put_run("thread-1", "run-1", parent_run_id=None, title="Hello")
+    await store.put_run("thread-1", "run-1", parent_run_id=None, title="Hello", run_input={"text": "test"})
     threads = await store.get_threads()
     assert len(threads) == 1
     assert threads[0].thread_id == "thread-1"
@@ -32,16 +32,16 @@ async def test_put_and_get_thread(store):
 
 @pytest.mark.asyncio
 async def test_namespace_stored_on_thread(store):
-    await store.put_run("thread-1", "run-1", parent_run_id=None, namespace="project-abc")
+    await store.put_run("thread-1", "run-1", parent_run_id=None, namespace="project-abc", run_input={"text": "test"})
     threads = await store.get_threads()
     assert threads[0].namespace == "project-abc"
 
 
 @pytest.mark.asyncio
 async def test_namespace_filter(store):
-    await store.put_run("thread-1", "run-1", parent_run_id=None, namespace="project-abc")
-    await store.put_run("thread-2", "run-2", parent_run_id=None, namespace="project-xyz")
-    await store.put_run("thread-3", "run-3", parent_run_id=None, namespace="project-abc")
+    await store.put_run("thread-1", "run-1", parent_run_id=None, namespace="project-abc", run_input={"text": "test"})
+    await store.put_run("thread-2", "run-2", parent_run_id=None, namespace="project-xyz", run_input={"text": "test"})
+    await store.put_run("thread-3", "run-3", parent_run_id=None, namespace="project-abc", run_input={"text": "test"})
 
     abc = await store.get_threads(namespace="project-abc")
     assert {t.thread_id for t in abc} == {"thread-1", "thread-3"}
@@ -52,32 +52,32 @@ async def test_namespace_filter(store):
 
 @pytest.mark.asyncio
 async def test_namespace_not_overwritten_on_subsequent_runs(store):
-    await store.put_run("thread-1", "run-1", parent_run_id=None, namespace="original")
-    await store.put_run("thread-1", "run-2", parent_run_id=None, namespace="other")
+    await store.put_run("thread-1", "run-1", parent_run_id=None, namespace="original", run_input={"text": "test"})
+    await store.put_run("thread-1", "run-2", parent_run_id=None, namespace="other", run_input={"text": "test"})
     threads = await store.get_threads()
     assert threads[0].namespace == "original"
 
 
 @pytest.mark.asyncio
 async def test_no_namespace_filter_returns_all(store):
-    await store.put_run("thread-1", "run-1", parent_run_id=None, namespace="ns-a")
-    await store.put_run("thread-2", "run-2", parent_run_id=None, namespace="ns-b")
+    await store.put_run("thread-1", "run-1", parent_run_id=None, namespace="ns-a", run_input={"text": "test"})
+    await store.put_run("thread-2", "run-2", parent_run_id=None, namespace="ns-b", run_input={"text": "test"})
     all_threads = await store.get_threads()
     assert len(all_threads) == 2
 
 
 @pytest.mark.asyncio
 async def test_put_run_creates_thread_once(store):
-    await store.put_run("thread-1", "run-1", parent_run_id=None)
-    await store.put_run("thread-1", "run-2", parent_run_id="run-1")
+    await store.put_run("thread-1", "run-1", parent_run_id=None, run_input={"text": "test"})
+    await store.put_run("thread-1", "run-2", parent_run_id="run-1", run_input={"text": "test"})
     threads = await store.get_threads()
     assert len(threads) == 1  # thread created only once
 
 
 @pytest.mark.asyncio
 async def test_get_runs_top_level(store):
-    await store.put_run("thread-1", "run-1", parent_run_id=None, title="Master")
-    await store.put_run("thread-1", "run-2", parent_run_id="run-1", title="Sub")
+    await store.put_run("thread-1", "run-1", parent_run_id=None, title="Master", run_input={"text": "test"})
+    await store.put_run("thread-1", "run-2", parent_run_id="run-1", title="Sub", run_input={"text": "test"})
     runs = await store.get_runs("thread-1")
     assert len(runs) == 1
     assert runs[0].run_id == "run-1"
@@ -85,9 +85,9 @@ async def test_get_runs_top_level(store):
 
 @pytest.mark.asyncio
 async def test_get_runs_by_parent(store):
-    await store.put_run("thread-1", "run-1", parent_run_id=None)
-    await store.put_run("thread-1", "run-2", parent_run_id="run-1")
-    await store.put_run("thread-1", "run-3", parent_run_id="run-1")
+    await store.put_run("thread-1", "run-1", parent_run_id=None, run_input={"text": "test"})
+    await store.put_run("thread-1", "run-2", parent_run_id="run-1", run_input={"text": "test"})
+    await store.put_run("thread-1", "run-3", parent_run_id="run-1", run_input={"text": "test"})
     sub_runs = await store.get_runs("thread-1", parent_run_id="run-1")
     assert len(sub_runs) == 2
     assert {r.run_id for r in sub_runs} == {"run-2", "run-3"}
@@ -95,8 +95,8 @@ async def test_get_runs_by_parent(store):
 
 @pytest.mark.asyncio
 async def test_get_runs_respects_namespace(store):
-    await store.put_run("thread-1", "run-1", parent_run_id=None, namespace="project-a")
-    await store.put_run("thread-2", "run-2", parent_run_id=None, namespace="project-b")
+    await store.put_run("thread-1", "run-1", parent_run_id=None, namespace="project-a", run_input={"text": "test"})
+    await store.put_run("thread-2", "run-2", parent_run_id=None, namespace="project-b", run_input={"text": "test"})
 
     runs = await store.get_runs("thread-1", namespace="project-a")
     assert [run.run_id for run in runs] == ["run-1"]
@@ -107,7 +107,7 @@ async def test_get_runs_respects_namespace(store):
 
 @pytest.mark.asyncio
 async def test_update_run_status(store):
-    await store.put_run("thread-1", "run-1", parent_run_id=None)
+    await store.put_run("thread-1", "run-1", parent_run_id=None, run_input={"text": "test"})
     await store.update_run("run-1", status="completed", summary="Done")
     runs = await store.get_runs("thread-1")
     assert runs[0].status == "completed"
@@ -116,8 +116,8 @@ async def test_update_run_status(store):
 
 @pytest.mark.asyncio
 async def test_update_run_flushes_buffered_events_before_terminal_status(store):
-    await store.put_run("thread-1", "run-1", parent_run_id=None)
-    await store.put_event("run-1", 0, "RUN_STARTED", {"threadId": "thread-1"})
+    await store.put_run("thread-1", "run-1", parent_run_id=None, run_input={"text": "test"})
+    await store.put_event("run-1", "thread-1", 0, "RUN_STARTED", {"threadId": "thread-1"})
     await store.update_run("run-1", status="completed", summary="Done")
 
     async with store._engine.connect() as conn:
@@ -135,7 +135,7 @@ async def test_update_run_flushes_buffered_events_before_terminal_status(store):
 
 @pytest.mark.asyncio
 async def test_get_run_respects_namespace(store):
-    await store.put_run("thread-1", "run-1", parent_run_id=None, namespace="project-a")
+    await store.put_run("thread-1", "run-1", parent_run_id=None, namespace="project-a", run_input={"text": "test"})
 
     run = await store.get_run("run-1", namespace="project-a")
     assert run is not None
@@ -147,10 +147,10 @@ async def test_get_run_respects_namespace(store):
 
 @pytest.mark.asyncio
 async def test_put_and_get_events(store):
-    await store.put_run("thread-1", "run-1", parent_run_id=None)
-    await store.put_event("run-1", 0, "RUN_STARTED", {"threadId": "thread-1"})
-    await store.put_event("run-1", 1, "TEXT_MESSAGE_START", {"messageId": "msg-1"})
-    await store.put_event("run-1", 2, "TEXT_MESSAGE_END", {"messageId": "msg-1"})
+    await store.put_run("thread-1", "run-1", parent_run_id=None, run_input={"text": "test"})
+    await store.put_event("run-1", "thread-1", 0, "RUN_STARTED", {"threadId": "thread-1"})
+    await store.put_event("run-1", "thread-1", 1, "TEXT_MESSAGE_START", {"messageId": "msg-1"})
+    await store.put_event("run-1", "thread-1", 2, "TEXT_MESSAGE_END", {"messageId": "msg-1"})
 
     events = await store.get_events("run-1")
     assert len(events) == 3
@@ -161,17 +161,17 @@ async def test_put_and_get_events(store):
 
 @pytest.mark.asyncio
 async def test_duplicate_event_ignored(store):
-    await store.put_run("thread-1", "run-1", parent_run_id=None)
-    await store.put_event("run-1", 0, "RUN_STARTED", {"threadId": "thread-1"})
-    await store.put_event("run-1", 0, "RUN_STARTED", {"threadId": "thread-1"})  # duplicate
+    await store.put_run("thread-1", "run-1", parent_run_id=None, run_input={"text": "test"})
+    await store.put_event("run-1", "thread-1", 0, "RUN_STARTED", {"threadId": "thread-1"})
+    await store.put_event("run-1", "thread-1", 0, "RUN_STARTED", {"threadId": "thread-1"})  # duplicate
     events = await store.get_events("run-1")
     assert len(events) == 1
 
 
 @pytest.mark.asyncio
 async def test_get_events_respects_namespace(store):
-    await store.put_run("thread-1", "run-1", parent_run_id=None, namespace="project-a")
-    await store.put_event("run-1", 0, "RUN_STARTED", {"threadId": "thread-1"})
+    await store.put_run("thread-1", "run-1", parent_run_id=None, namespace="project-a", run_input={"text": "test"})
+    await store.put_event("run-1", "thread-1", 0, "RUN_STARTED", {"threadId": "thread-1"})
 
     events = await store.get_events("run-1", namespace="project-a")
     assert len(events) == 1
@@ -182,8 +182,8 @@ async def test_get_events_respects_namespace(store):
 
 @pytest.mark.asyncio
 async def test_namespace_mismatch_does_not_flush_buffered_events(store):
-    await store.put_run("thread-1", "run-1", parent_run_id=None, namespace="project-a")
-    await store.put_event("run-1", 0, "RUN_STARTED", {"threadId": "thread-1"})
+    await store.put_run("thread-1", "run-1", parent_run_id=None, namespace="project-a", run_input={"text": "test"})
+    await store.put_event("run-1", "thread-1", 0, "RUN_STARTED", {"threadId": "thread-1"})
 
     hidden = await store.get_events("run-1", namespace="project-b")
     assert hidden == []
@@ -198,8 +198,8 @@ async def test_namespace_mismatch_does_not_flush_buffered_events(store):
 
 @pytest.mark.asyncio
 async def test_put_event_is_buffered_until_get_events_flushes(store):
-    await store.put_run("thread-1", "run-1", parent_run_id=None)
-    await store.put_event("run-1", 0, "RUN_STARTED", {"threadId": "thread-1"})
+    await store.put_run("thread-1", "run-1", parent_run_id=None, run_input={"text": "test"})
+    await store.put_event("run-1", "thread-1", 0, "RUN_STARTED", {"threadId": "thread-1"})
 
     async with store._engine.connect() as conn:
         result = await conn.execute(
@@ -224,8 +224,8 @@ async def test_close_flushes_pending_events(tmp_path):
     db_path = tmp_path / "buffered-close.db"
     store = AGUIPersistence(PersistenceConfig(db_url=f"sqlite:///{db_path}", persist_on_completion=False))
     await store.initialize()
-    await store.put_run("thread-1", "run-1", parent_run_id=None)
-    await store.put_event("run-1", 0, "RUN_STARTED", {"threadId": "thread-1"})
+    await store.put_run("thread-1", "run-1", parent_run_id=None, run_input={"text": "test"})
+    await store.put_event("run-1", "thread-1", 0, "RUN_STARTED", {"threadId": "thread-1"})
 
     await store.close()
 
@@ -244,7 +244,7 @@ async def test_close_disables_store_methods():
     await store.close()
 
     with pytest.raises(RuntimeError, match="closed"):
-        await store.put_run("thread-1", "run-1", parent_run_id=None)
+        await store.put_run("thread-1", "run-1", parent_run_id=None, run_input={"text": "test"})
 
     with pytest.raises(RuntimeError, match="closed"):
         await store.get_threads()
@@ -255,8 +255,8 @@ async def test_put_event_writes_immediately_when_buffering_disabled():
     store = mem_store(enable_event_buffering=False, persist_on_completion=False)
     await store.initialize()
     try:
-        await store.put_run("thread-1", "run-1", parent_run_id=None)
-        await store.put_event("run-1", 0, "RUN_STARTED", {"threadId": "thread-1"})
+        await store.put_run("thread-1", "run-1", parent_run_id=None, run_input={"text": "test"})
+        await store.put_event("run-1", "thread-1", 0, "RUN_STARTED", {"threadId": "thread-1"})
 
         async with store._engine.connect() as conn:
             result = await conn.execute(
@@ -273,8 +273,8 @@ async def test_get_events_reads_without_buffer_flush_when_disabled():
     store = mem_store(enable_event_buffering=False, persist_on_completion=False)
     await store.initialize()
     try:
-        await store.put_run("thread-1", "run-1", parent_run_id=None)
-        await store.put_event("run-1", 0, "RUN_STARTED", {"threadId": "thread-1"})
+        await store.put_run("thread-1", "run-1", parent_run_id=None, run_input={"text": "test"})
+        await store.put_event("run-1", "thread-1", 0, "RUN_STARTED", {"threadId": "thread-1"})
 
         events = await store.get_events("run-1")
         assert len(events) == 1
@@ -285,13 +285,16 @@ async def test_get_events_reads_without_buffer_flush_when_disabled():
 
 @pytest.mark.asyncio
 async def test_buffered_write_failures_surface_and_poison_future_operations():
+    """agui_events.run_id has no FK to agui_runs (Part A) — an unregistered run_id
+    no longer fails on its own. Use a NULL thread_id instead to violate agui_events'
+    NOT NULL constraint and induce a genuine write failure."""
     store = mem_store(persist_on_completion=False)
     await store.initialize()
     try:
-        await store.put_event("missing-run", 0, "RUN_STARTED", {"threadId": "thread-1"})
+        await store.put_event("bad-run", None, 0, "RUN_STARTED", {"threadId": "thread-1"})
 
         with pytest.raises(Exception):
-            await store.get_events("missing-run")
+            await store.get_events("bad-run")
 
         with pytest.raises(RuntimeError, match="Buffered event write failed"):
             await store.get_threads()
@@ -306,7 +309,7 @@ async def test_buffered_write_failures_surface_and_poison_future_operations():
 async def test_close_surfaces_prior_buffered_write_failure():
     store = mem_store(persist_on_completion=False)
     await store.initialize()
-    await store.put_event("missing-run", 0, "RUN_STARTED", {"threadId": "thread-1"})
+    await store.put_event("bad-run", None, 0, "RUN_STARTED", {"threadId": "thread-1"})
 
     with pytest.raises(Exception):
         await store._flush_all_events()
@@ -320,9 +323,9 @@ async def test_failed_multi_run_batch_still_flushes_other_runs():
     store = mem_store(event_flush_interval=10)
     await store.initialize()
     try:
-        await store.put_run("thread-1", "good-run", parent_run_id=None)
-        await store.put_event("good-run", 0, "RUN_STARTED", {"threadId": "thread-1"})
-        await store.put_event("missing-run", 0, "RUN_STARTED", {"threadId": "thread-1"})
+        await store.put_run("thread-1", "good-run", parent_run_id=None, run_input={"text": "test"})
+        await store.put_event("good-run", "thread-1", 0, "RUN_STARTED", {"threadId": "thread-1"})
+        await store.put_event("bad-run", None, 0, "RUN_STARTED", {"threadId": "thread-1"})
 
         with pytest.raises(Exception):
             await store._flush_all_events()
@@ -345,8 +348,8 @@ async def test_completed_flusher_task_is_restarted_for_new_flushes():
     store = mem_store(event_flush_interval=10, persist_on_completion=False)
     await store.initialize()
     try:
-        await store.put_run("thread-1", "run-1", parent_run_id=None)
-        await store.put_event("run-1", 0, "RUN_STARTED", {"threadId": "thread-1"})
+        await store.put_run("thread-1", "run-1", parent_run_id=None, run_input={"text": "test"})
+        await store.put_event("run-1", "thread-1", 0, "RUN_STARTED", {"threadId": "thread-1"})
 
         done_task = asyncio.create_task(asyncio.sleep(0))
         await done_task
@@ -364,7 +367,7 @@ async def test_get_events_waits_for_pending_tokens_while_same_run_is_inflight():
     store = mem_store(event_batch_size=1, event_flush_interval=10, persist_on_completion=False)
     await store.initialize()
     try:
-        await store.put_run("thread-1", "run-1", parent_run_id=None)
+        await store.put_run("thread-1", "run-1", parent_run_id=None, run_input={"text": "test"})
 
         started = asyncio.Event()
         release = asyncio.Event()
@@ -378,9 +381,9 @@ async def test_get_events_waits_for_pending_tokens_while_same_run_is_inflight():
 
         store._flush_batch = controlled_flush
 
-        await store.put_event("run-1", 0, "RUN_STARTED", {"threadId": "thread-1"})
+        await store.put_event("run-1", "thread-1", 0, "RUN_STARTED", {"threadId": "thread-1"})
         await started.wait()
-        await store.put_event("run-1", 1, "TEXT_MESSAGE_END", {"threadId": "thread-1"})
+        await store.put_event("run-1", "thread-1", 1, "TEXT_MESSAGE_END", {"threadId": "thread-1"})
 
         read_task = asyncio.create_task(store.get_events("run-1"))
         await asyncio.sleep(0)
@@ -395,7 +398,7 @@ async def test_get_events_waits_for_pending_tokens_while_same_run_is_inflight():
 
 @pytest.mark.asyncio
 async def test_delete_thread_waits_for_inflight_event_batches(store):
-    await store.put_run("thread-1", "run-1", parent_run_id=None)
+    await store.put_run("thread-1", "run-1", parent_run_id=None, run_input={"text": "test"})
 
     started = asyncio.Event()
     release = asyncio.Event()
@@ -408,7 +411,7 @@ async def test_delete_thread_waits_for_inflight_event_batches(store):
 
     store._flush_batch = controlled_flush
 
-    await store.put_event("run-1", 0, "RUN_STARTED", {"threadId": "thread-1"})
+    await store.put_event("run-1", "thread-1", 0, "RUN_STARTED", {"threadId": "thread-1"})
     await started.wait()
 
     delete_task = asyncio.create_task(store.delete_thread("thread-1"))
@@ -425,10 +428,10 @@ async def test_delete_thread_ignores_unrelated_buffered_runs():
     store = mem_store(event_flush_interval=10)
     await store.initialize()
     try:
-        await store.put_run("thread-a", "run-a", parent_run_id=None)
-        await store.put_run("thread-b", "run-b", parent_run_id=None)
-        await store.put_event("run-a", 0, "RUN_STARTED", {"threadId": "thread-a"})
-        await store.put_event("missing-run", 0, "RUN_STARTED", {"threadId": "thread-b"})
+        await store.put_run("thread-a", "run-a", parent_run_id=None, run_input={"text": "test"})
+        await store.put_run("thread-b", "run-b", parent_run_id=None, run_input={"text": "test"})
+        await store.put_event("run-a", "thread-a", 0, "RUN_STARTED", {"threadId": "thread-a"})
+        await store.put_event("missing-run", "thread-b", 0, "RUN_STARTED", {"threadId": "thread-b"})
 
         assert await store.delete_thread("thread-a") is True
 
@@ -460,8 +463,8 @@ async def test_flusher_task_stops_when_buffer_becomes_idle():
     store = mem_store(persist_on_completion=False)
     await store.initialize()
     try:
-        await store.put_run("thread-1", "run-1", parent_run_id=None)
-        await store.put_event("run-1", 0, "RUN_STARTED", {"threadId": "thread-1"})
+        await store.put_run("thread-1", "run-1", parent_run_id=None, run_input={"text": "test"})
+        await store.put_event("run-1", "thread-1", 0, "RUN_STARTED", {"threadId": "thread-1"})
         await store.get_events("run-1")
 
         for _ in range(10):
@@ -479,15 +482,15 @@ async def test_enqueue_during_idle_flusher_exit_starts_replacement_flusher():
     store = mem_store(event_flush_interval=10, persist_on_completion=False)
     await store.initialize()
     try:
-        await store.put_run("thread-1", "run-1", parent_run_id=None)
-        await store.put_event("run-1", 0, "RUN_STARTED", {"threadId": "thread-1"})
+        await store.put_run("thread-1", "run-1", parent_run_id=None, run_input={"text": "test"})
+        await store.put_event("run-1", "thread-1", 0, "RUN_STARTED", {"threadId": "thread-1"})
         await store.get_events("run-1")
 
         old_task = asyncio.create_task(store._event_flusher_loop())
         store._flusher_task = old_task
 
         await asyncio.sleep(0)
-        await store.put_event("run-1", 1, "TEXT_MESSAGE_END", {"threadId": "thread-1"})
+        await store.put_event("run-1", "thread-1", 1, "TEXT_MESSAGE_END", {"threadId": "thread-1"})
         events = await store.get_events("run-1")
 
         assert [event.seq for event in events] == [0, 1]
@@ -498,9 +501,9 @@ async def test_enqueue_during_idle_flusher_exit_starts_replacement_flusher():
 @pytest.mark.asyncio
 async def test_get_threads_before_cursor(store):
     import asyncio
-    await store.put_run("thread-1", "run-1", parent_run_id=None)
+    await store.put_run("thread-1", "run-1", parent_run_id=None, run_input={"text": "test"})
     await asyncio.sleep(0.01)
-    await store.put_run("thread-2", "run-2", parent_run_id=None)
+    await store.put_run("thread-2", "run-2", parent_run_id=None, run_input={"text": "test"})
     threads = await store.get_threads(limit=10)
     assert threads[0].thread_id == "thread-2"  # most recent first
 
@@ -511,8 +514,8 @@ async def test_get_threads_before_cursor(store):
 
 @pytest.mark.asyncio
 async def test_run_seq_increments(store):
-    await store.put_run("thread-1", "run-1", parent_run_id=None)
-    await store.put_run("thread-1", "run-2", parent_run_id=None)
+    await store.put_run("thread-1", "run-1", parent_run_id=None, run_input={"text": "test"})
+    await store.put_run("thread-1", "run-2", parent_run_id=None, run_input={"text": "test"})
     runs = await store.get_runs("thread-1")
     seqs = {r.run_id: r.seq for r in runs}
     assert seqs["run-1"] == 0
@@ -521,7 +524,7 @@ async def test_run_seq_increments(store):
 
 @pytest.mark.asyncio
 async def test_delete_thread_respects_namespace(store):
-    await store.put_run("thread-1", "run-1", parent_run_id=None, namespace="project-a")
+    await store.put_run("thread-1", "run-1", parent_run_id=None, namespace="project-a", run_input={"text": "test"})
 
     deleted = await store.delete_thread("thread-1", namespace="project-b")
     assert deleted is False
@@ -547,9 +550,9 @@ async def test_persist_on_completion_get_events_returns_buffered_events():
     store = mem_store(persist_on_completion=True)
     await store.initialize()
     try:
-        await store.put_run("thread-1", "run-1", parent_run_id=None)
-        await store.put_event("run-1", 0, "RUN_STARTED", {"threadId": "thread-1"})
-        await store.put_event("run-1", 1, "TEXT_MESSAGE_START", {"messageId": "msg-1"})
+        await store.put_run("thread-1", "run-1", parent_run_id=None, run_input={"text": "test"})
+        await store.put_event("run-1", "thread-1", 0, "RUN_STARTED", {"threadId": "thread-1"})
+        await store.put_event("run-1", "thread-1", 1, "TEXT_MESSAGE_START", {"messageId": "msg-1"})
 
         # Events are buffered — DB should be empty
         async with store._engine.connect() as conn:
@@ -596,11 +599,11 @@ async def test_persist_on_completion_get_events_merges_buffered_deltas():
     store = mem_store(persist_on_completion=True, merge_delta_events=True)
     await store.initialize()
     try:
-        await store.put_run("thread-1", "run-1", parent_run_id=None)
-        await store.put_event("run-1", 0, "TEXT_MESSAGE_CONTENT", {"messageId": "msg-1", "delta": "Hello"})
-        await store.put_event("run-1", 1, "TEXT_MESSAGE_CONTENT", {"messageId": "msg-1", "delta": ", "})
-        await store.put_event("run-1", 2, "TEXT_MESSAGE_CONTENT", {"messageId": "msg-1", "delta": "world"})
-        await store.put_event("run-1", 3, "TEXT_MESSAGE_END", {"messageId": "msg-1"})
+        await store.put_run("thread-1", "run-1", parent_run_id=None, run_input={"text": "test"})
+        await store.put_event("run-1", "thread-1", 0, "TEXT_MESSAGE_CONTENT", {"messageId": "msg-1", "delta": "Hello"})
+        await store.put_event("run-1", "thread-1", 1, "TEXT_MESSAGE_CONTENT", {"messageId": "msg-1", "delta": ", "})
+        await store.put_event("run-1", "thread-1", 2, "TEXT_MESSAGE_CONTENT", {"messageId": "msg-1", "delta": "world"})
+        await store.put_event("run-1", "thread-1", 3, "TEXT_MESSAGE_END", {"messageId": "msg-1"})
 
         events = await store.get_events("run-1")
 
@@ -655,8 +658,8 @@ async def test_persist_on_completion_get_events_waits_for_same_run_atomic_finali
     store = mem_store(persist_on_completion=True)
     await store.initialize()
     try:
-        await store.put_run("thread-1", "run-1", parent_run_id=None)
-        await store.put_event("run-1", 0, "RUN_STARTED", {"threadId": "thread-1"})
+        await store.put_run("thread-1", "run-1", parent_run_id=None, run_input={"text": "test"})
+        await store.put_event("run-1", "thread-1", 0, "RUN_STARTED", {"threadId": "thread-1"})
 
         started, release = _stall_engine_begin(store)
 
@@ -688,9 +691,9 @@ async def test_persist_on_completion_get_events_waits_for_inflight_background_fl
     store = mem_store(persist_on_completion=True)
     await store.initialize()
     try:
-        await store.put_run("thread-1", "run-1", parent_run_id=None)
-        await store.put_event("run-1", 0, "RUN_STARTED", {"threadId": "thread-1"})
-        await store.put_event("run-1", 1, "TEXT_MESSAGE_START", {"messageId": "msg-1"})
+        await store.put_run("thread-1", "run-1", parent_run_id=None, run_input={"text": "test"})
+        await store.put_event("run-1", "thread-1", 0, "RUN_STARTED", {"threadId": "thread-1"})
+        await store.put_event("run-1", "thread-1", 1, "TEXT_MESSAGE_START", {"messageId": "msg-1"})
 
         started, release = _stall_engine_begin(store)
 
@@ -722,8 +725,8 @@ async def test_persist_on_completion_flushed_on_error_status():
     store = mem_store(persist_on_completion=True)
     await store.initialize()
     try:
-        await store.put_run("thread-1", "run-1", parent_run_id=None)
-        await store.put_event("run-1", 0, "RUN_STARTED", {"threadId": "thread-1"})
+        await store.put_run("thread-1", "run-1", parent_run_id=None, run_input={"text": "test"})
+        await store.put_event("run-1", "thread-1", 0, "RUN_STARTED", {"threadId": "thread-1"})
 
         # error is also a terminal status
         await store.update_run("run-1", status="error")
@@ -743,10 +746,10 @@ async def test_persist_on_completion_close_discards_unfinished_runs(tmp_path):
     db_path = tmp_path / "poc-close.db"
     store = AGUIPersistence(PersistenceConfig(db_url=f"sqlite:///{db_path}", persist_on_completion=True))
     await store.initialize()
-    await store.put_run("thread-1", "run-finished", parent_run_id=None)
-    await store.put_run("thread-1", "run-partial", parent_run_id=None)
-    await store.put_event("run-finished", 0, "RUN_STARTED", {})
-    await store.put_event("run-partial", 0, "RUN_STARTED", {})
+    await store.put_run("thread-1", "run-finished", parent_run_id=None, run_input={"text": "test"})
+    await store.put_run("thread-1", "run-partial", parent_run_id=None, run_input={"text": "test"})
+    await store.put_event("run-finished", "thread-1", 0, "RUN_STARTED", {})
+    await store.put_event("run-partial", "thread-1", 0, "RUN_STARTED", {})
     await store.update_run("run-finished", status="completed")
     # run-partial never reaches terminal status — close() should discard it
     await store.close()
@@ -769,8 +772,8 @@ async def test_persist_on_completion_non_terminal_update_does_not_flush():
     store = mem_store(persist_on_completion=True)
     await store.initialize()
     try:
-        await store.put_run("thread-1", "run-1", parent_run_id=None)
-        await store.put_event("run-1", 0, "RUN_STARTED", {"threadId": "thread-1"})
+        await store.put_run("thread-1", "run-1", parent_run_id=None, run_input={"text": "test"})
+        await store.put_event("run-1", "thread-1", 0, "RUN_STARTED", {"threadId": "thread-1"})
 
         # Non-terminal status update — should not flush
         await store.update_run("run-1", status="running")
@@ -791,11 +794,11 @@ async def test_persist_on_completion_batch_size_does_not_trigger_early_flush():
     store = mem_store(persist_on_completion=True, event_batch_size=2)
     await store.initialize()
     try:
-        await store.put_run("thread-1", "run-1", parent_run_id=None)
-        await store.put_event("run-1", 0, "RUN_STARTED", {"threadId": "thread-1"})
-        await store.put_event("run-1", 1, "TEXT_MESSAGE_START", {"messageId": "m1"})
+        await store.put_run("thread-1", "run-1", parent_run_id=None, run_input={"text": "test"})
+        await store.put_event("run-1", "thread-1", 0, "RUN_STARTED", {"threadId": "thread-1"})
+        await store.put_event("run-1", "thread-1", 1, "TEXT_MESSAGE_START", {"messageId": "m1"})
         # Third event exceeds event_batch_size=2 — must NOT flush early
-        await store.put_event("run-1", 2, "TEXT_MESSAGE_END", {"messageId": "m1"})
+        await store.put_event("run-1", "thread-1", 2, "TEXT_MESSAGE_END", {"messageId": "m1"})
 
         async with store._engine.connect() as conn:
             count = (await conn.execute(
@@ -820,9 +823,9 @@ async def test_persist_on_completion_events_and_status_written_atomically():
     store = mem_store(persist_on_completion=True)
     await store.initialize()
     try:
-        await store.put_run("thread-1", "run-1", parent_run_id=None)
-        await store.put_event("run-1", 0, "RUN_STARTED", {"threadId": "thread-1"})
-        await store.put_event("run-1", 1, "TEXT_MESSAGE_CONTENT", {"messageId": "m1", "delta": "hi"})
+        await store.put_run("thread-1", "run-1", parent_run_id=None, run_input={"text": "test"})
+        await store.put_event("run-1", "thread-1", 0, "RUN_STARTED", {"threadId": "thread-1"})
+        await store.put_event("run-1", "thread-1", 1, "TEXT_MESSAGE_CONTENT", {"messageId": "m1", "delta": "hi"})
 
         await store.update_run("run-1", status="completed", summary="done")
 
@@ -850,12 +853,12 @@ async def test_merge_delta_events_text_message_content():
     store = mem_store(merge_delta_events=True, persist_on_completion=False)
     await store.initialize()
     try:
-        await store.put_run("thread-1", "run-1", parent_run_id=None)
-        await store.put_event("run-1", 0, "RUN_STARTED", {"threadId": "thread-1"})
-        await store.put_event("run-1", 1, "TEXT_MESSAGE_CONTENT", {"messageId": "msg-1", "delta": "Hello"})
-        await store.put_event("run-1", 2, "TEXT_MESSAGE_CONTENT", {"messageId": "msg-1", "delta": ", "})
-        await store.put_event("run-1", 3, "TEXT_MESSAGE_CONTENT", {"messageId": "msg-1", "delta": "world"})
-        await store.put_event("run-1", 4, "TEXT_MESSAGE_END", {"messageId": "msg-1"})
+        await store.put_run("thread-1", "run-1", parent_run_id=None, run_input={"text": "test"})
+        await store.put_event("run-1", "thread-1", 0, "RUN_STARTED", {"threadId": "thread-1"})
+        await store.put_event("run-1", "thread-1", 1, "TEXT_MESSAGE_CONTENT", {"messageId": "msg-1", "delta": "Hello"})
+        await store.put_event("run-1", "thread-1", 2, "TEXT_MESSAGE_CONTENT", {"messageId": "msg-1", "delta": ", "})
+        await store.put_event("run-1", "thread-1", 3, "TEXT_MESSAGE_CONTENT", {"messageId": "msg-1", "delta": "world"})
+        await store.put_event("run-1", "thread-1", 4, "TEXT_MESSAGE_END", {"messageId": "msg-1"})
 
         events = await store.get_events("run-1")
 
@@ -876,10 +879,10 @@ async def test_merge_delta_events_tool_call_args():
     store = mem_store(merge_delta_events=True, persist_on_completion=False)
     await store.initialize()
     try:
-        await store.put_run("thread-1", "run-1", parent_run_id=None)
-        await store.put_event("run-1", 0, "TOOL_CALL_ARGS", {"toolCallId": "tc-1", "delta": '{"key"'})
-        await store.put_event("run-1", 1, "TOOL_CALL_ARGS", {"toolCallId": "tc-1", "delta": ': "val'})
-        await store.put_event("run-1", 2, "TOOL_CALL_ARGS", {"toolCallId": "tc-1", "delta": 'ue"}'})
+        await store.put_run("thread-1", "run-1", parent_run_id=None, run_input={"text": "test"})
+        await store.put_event("run-1", "thread-1", 0, "TOOL_CALL_ARGS", {"toolCallId": "tc-1", "delta": '{"key"'})
+        await store.put_event("run-1", "thread-1", 1, "TOOL_CALL_ARGS", {"toolCallId": "tc-1", "delta": ': "val'})
+        await store.put_event("run-1", "thread-1", 2, "TOOL_CALL_ARGS", {"toolCallId": "tc-1", "delta": 'ue"}'})
 
         events = await store.get_events("run-1")
 
@@ -897,9 +900,9 @@ async def test_merge_delta_events_different_message_ids_not_merged():
     store = mem_store(merge_delta_events=True, persist_on_completion=False)
     await store.initialize()
     try:
-        await store.put_run("thread-1", "run-1", parent_run_id=None)
-        await store.put_event("run-1", 0, "TEXT_MESSAGE_CONTENT", {"messageId": "msg-1", "delta": "Hi"})
-        await store.put_event("run-1", 1, "TEXT_MESSAGE_CONTENT", {"messageId": "msg-2", "delta": "Bye"})
+        await store.put_run("thread-1", "run-1", parent_run_id=None, run_input={"text": "test"})
+        await store.put_event("run-1", "thread-1", 0, "TEXT_MESSAGE_CONTENT", {"messageId": "msg-1", "delta": "Hi"})
+        await store.put_event("run-1", "thread-1", 1, "TEXT_MESSAGE_CONTENT", {"messageId": "msg-2", "delta": "Bye"})
 
         events = await store.get_events("run-1")
 
@@ -918,10 +921,10 @@ async def test_merge_delta_events_non_adjacent_same_id_not_merged():
     store = mem_store(merge_delta_events=True, persist_on_completion=False)
     await store.initialize()
     try:
-        await store.put_run("thread-1", "run-1", parent_run_id=None)
-        await store.put_event("run-1", 0, "TEXT_MESSAGE_CONTENT", {"messageId": "msg-1", "delta": "Hello"})
-        await store.put_event("run-1", 1, "TEXT_MESSAGE_END", {"messageId": "msg-1"})
-        await store.put_event("run-1", 2, "TEXT_MESSAGE_CONTENT", {"messageId": "msg-1", "delta": "World"})
+        await store.put_run("thread-1", "run-1", parent_run_id=None, run_input={"text": "test"})
+        await store.put_event("run-1", "thread-1", 0, "TEXT_MESSAGE_CONTENT", {"messageId": "msg-1", "delta": "Hello"})
+        await store.put_event("run-1", "thread-1", 1, "TEXT_MESSAGE_END", {"messageId": "msg-1"})
+        await store.put_event("run-1", "thread-1", 2, "TEXT_MESSAGE_CONTENT", {"messageId": "msg-1", "delta": "World"})
 
         events = await store.get_events("run-1")
 
@@ -939,9 +942,9 @@ async def test_merge_delta_events_across_flush_boundaries():
     store = mem_store(merge_delta_events=True, event_flush_interval=10, persist_on_completion=False)
     await store.initialize()
     try:
-        await store.put_run("thread-1", "run-1", parent_run_id=None)
-        await store.put_event("run-1", 0, "TEXT_MESSAGE_CONTENT", {"messageId": "msg-1", "delta": "Hello"})
-        await store.put_event("run-1", 1, "TEXT_MESSAGE_CONTENT", {"messageId": "msg-1", "delta": ", "})
+        await store.put_run("thread-1", "run-1", parent_run_id=None, run_input={"text": "test"})
+        await store.put_event("run-1", "thread-1", 0, "TEXT_MESSAGE_CONTENT", {"messageId": "msg-1", "delta": "Hello"})
+        await store.put_event("run-1", "thread-1", 1, "TEXT_MESSAGE_CONTENT", {"messageId": "msg-1", "delta": ", "})
         # Force first batch to flush before the next events arrive
         await store._flush_run("run-1")
 
@@ -952,8 +955,8 @@ async def test_merge_delta_events_across_flush_boundaries():
             assert count == 1  # two deltas already merged into one row
 
         # Second batch continues the same delta stream
-        await store.put_event("run-1", 2, "TEXT_MESSAGE_CONTENT", {"messageId": "msg-1", "delta": "world"})
-        await store.put_event("run-1", 3, "TEXT_MESSAGE_END", {"messageId": "msg-1"})
+        await store.put_event("run-1", "thread-1", 2, "TEXT_MESSAGE_CONTENT", {"messageId": "msg-1", "delta": "world"})
+        await store.put_event("run-1", "thread-1", 3, "TEXT_MESSAGE_END", {"messageId": "msg-1"})
 
         events = await store.get_events("run-1")
 
@@ -967,9 +970,9 @@ async def test_merge_delta_events_across_flush_boundaries():
 
 @pytest.mark.asyncio
 async def test_merge_delta_events_disabled_by_default(store):
-    await store.put_run("thread-1", "run-1", parent_run_id=None)
-    await store.put_event("run-1", 0, "TEXT_MESSAGE_CONTENT", {"messageId": "msg-1", "delta": "Hello"})
-    await store.put_event("run-1", 1, "TEXT_MESSAGE_CONTENT", {"messageId": "msg-1", "delta": " world"})
+    await store.put_run("thread-1", "run-1", parent_run_id=None, run_input={"text": "test"})
+    await store.put_event("run-1", "thread-1", 0, "TEXT_MESSAGE_CONTENT", {"messageId": "msg-1", "delta": "Hello"})
+    await store.put_event("run-1", "thread-1", 1, "TEXT_MESSAGE_CONTENT", {"messageId": "msg-1", "delta": " world"})
 
     events = await store.get_events("run-1")
     assert len(events) == 2  # not merged
@@ -981,9 +984,9 @@ async def test_merge_delta_events_disabled_by_default(store):
 
 @pytest.mark.asyncio
 async def test_non_delta_events_have_equal_started_at_ended_at(store):
-    await store.put_run("thread-1", "run-1", parent_run_id=None)
-    await store.put_event("run-1", 0, "RUN_STARTED", {"threadId": "thread-1"})
-    await store.put_event("run-1", 1, "TEXT_MESSAGE_START", {"messageId": "msg-1"})
+    await store.put_run("thread-1", "run-1", parent_run_id=None, run_input={"text": "test"})
+    await store.put_event("run-1", "thread-1", 0, "RUN_STARTED", {"threadId": "thread-1"})
+    await store.put_event("run-1", "thread-1", 1, "TEXT_MESSAGE_START", {"messageId": "msg-1"})
 
     events = await store.get_events("run-1")
     for event in events:
@@ -996,12 +999,12 @@ async def test_merged_event_timestamps_span_first_to_last_delta():
     store = mem_store(merge_delta_events=True, persist_on_completion=False)
     await store.initialize()
     try:
-        await store.put_run("thread-1", "run-1", parent_run_id=None)
-        await store.put_event("run-1", 0, "TEXT_MESSAGE_CONTENT", {"messageId": "msg-1", "delta": "a"})
+        await store.put_run("thread-1", "run-1", parent_run_id=None, run_input={"text": "test"})
+        await store.put_event("run-1", "thread-1", 0, "TEXT_MESSAGE_CONTENT", {"messageId": "msg-1", "delta": "a"})
         await asyncio.sleep(0.01)
-        await store.put_event("run-1", 1, "TEXT_MESSAGE_CONTENT", {"messageId": "msg-1", "delta": "b"})
+        await store.put_event("run-1", "thread-1", 1, "TEXT_MESSAGE_CONTENT", {"messageId": "msg-1", "delta": "b"})
         await asyncio.sleep(0.01)
-        await store.put_event("run-1", 2, "TEXT_MESSAGE_CONTENT", {"messageId": "msg-1", "delta": "c"})
+        await store.put_event("run-1", "thread-1", 2, "TEXT_MESSAGE_CONTENT", {"messageId": "msg-1", "delta": "c"})
 
         events = await store.get_events("run-1")
         assert len(events) == 1
@@ -1018,12 +1021,199 @@ async def test_unbuffered_events_have_equal_started_at_ended_at():
     store = mem_store(enable_event_buffering=False, persist_on_completion=False)
     await store.initialize()
     try:
-        await store.put_run("thread-1", "run-1", parent_run_id=None)
-        await store.put_event("run-1", 0, "RUN_STARTED", {"threadId": "thread-1"})
+        await store.put_run("thread-1", "run-1", parent_run_id=None, run_input={"text": "test"})
+        await store.put_event("run-1", "thread-1", 0, "RUN_STARTED", {"threadId": "thread-1"})
 
         events = await store.get_events("run-1")
         assert len(events) == 1
         assert events[0].started_at == events[0].ended_at
         assert events[0].started_at > 0
+    finally:
+        await store.close()
+
+
+# ------------------------------------------------------------------
+# agui_events.thread_id / FK-less events / flush_events
+#
+# wm-agent-server stops calling put_run/update_run/get_run/get_runs/get_all_runs/
+# get_threads entirely (it tracks all run metadata in its own store) and uses this
+# library purely for the event stream. agui_events.thread_id lets events be written,
+# read, and deleted without ever going through agui_runs — these tests exercise that
+# path directly, deliberately never calling put_run for the events under test.
+# ------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_put_event_writes_thread_id_column():
+    store = mem_store(enable_event_buffering=False, persist_on_completion=False)
+    await store.initialize()
+    try:
+        await store.put_event("run-1", "thread-1", 0, "RUN_STARTED", {})
+
+        async with store._engine.connect() as conn:
+            row = (await conn.execute(
+                text("SELECT thread_id FROM agui_events WHERE run_id = :rid AND seq = 0"),
+                {"rid": "run-1"},
+            )).fetchone()
+            assert row[0] == "thread-1"
+    finally:
+        await store.close()
+
+
+@pytest.mark.asyncio
+async def test_put_event_succeeds_with_no_corresponding_agui_runs_row():
+    """agui_events.run_id has no FK to agui_runs — an event for a run this library
+    never tracked (because the caller's own store owns run metadata) must still
+    write and read back cleanly."""
+    store = mem_store(enable_event_buffering=False, persist_on_completion=False)
+    await store.initialize()
+    try:
+        await store.put_event("untracked-run", "thread-1", 0, "RUN_STARTED", {"foo": "bar"})
+        events = await store.get_events("untracked-run")
+        assert len(events) == 1
+        assert events[0].data == {"foo": "bar"}
+    finally:
+        await store.close()
+
+
+@pytest.mark.asyncio
+async def test_delete_thread_deletes_events_by_thread_id_without_agui_runs():
+    """delete_thread must delete agui_events directly by thread_id, not via a
+    sub-select through agui_runs — must work even when agui_runs has zero rows."""
+    store = mem_store(event_flush_interval=10)
+    await store.initialize()
+    try:
+        await store.put_run("thread-1", "run-1", parent_run_id=None, run_input={"text": "test"})
+        await store.put_event("untracked-run", "thread-1", 0, "RUN_STARTED", {})
+        await store._flush_all_events()
+
+        async with store._engine.connect() as conn:
+            count = (await conn.execute(
+                text("SELECT COUNT(*) FROM agui_events WHERE run_id = :rid"),
+                {"rid": "untracked-run"},
+            )).scalar()
+            assert count == 1  # sanity: event landed despite no agui_runs row for it
+
+        assert await store.delete_thread("thread-1") is True
+
+        async with store._engine.connect() as conn:
+            count = (await conn.execute(
+                text("SELECT COUNT(*) FROM agui_events WHERE thread_id = :tid"),
+                {"tid": "thread-1"},
+            )).scalar()
+            assert count == 0
+    finally:
+        await store.close()
+
+
+@pytest.mark.asyncio
+async def test_delete_thread_deletes_events_when_thread_never_tracked_in_agui_threads():
+    """A caller that only ever calls put_event (never put_run) — the events-only usage
+    this feature exists for — has zero agui_threads rows for its thread_id. delete_thread
+    must still delete that thread's agui_events and report True, not silently no-op
+    because the agui_threads DELETE matched nothing."""
+    store = mem_store(event_flush_interval=10)
+    await store.initialize()
+    try:
+        await store.put_event("run-1", "thread-1", 0, "RUN_STARTED", {})
+        await store._flush_all_events()
+
+        async with store._engine.connect() as conn:
+            count = (await conn.execute(
+                text("SELECT COUNT(*) FROM agui_threads WHERE thread_id = :tid"),
+                {"tid": "thread-1"},
+            )).scalar()
+            assert count == 0  # sanity: never tracked via put_run
+
+        assert await store.delete_thread("thread-1") is True
+
+        async with store._engine.connect() as conn:
+            count = (await conn.execute(
+                text("SELECT COUNT(*) FROM agui_events WHERE thread_id = :tid"),
+                {"tid": "thread-1"},
+            )).scalar()
+            assert count == 0
+    finally:
+        await store.close()
+
+
+@pytest.mark.asyncio
+async def test_flush_events_writes_buffered_events_and_never_touches_agui_runs():
+    store = mem_store(event_flush_interval=10)
+    await store.initialize()
+    try:
+        await store.put_event("run-1", "thread-1", 0, "RUN_STARTED", {})
+        await store.put_event("run-1", "thread-1", 1, "TEXT_MESSAGE_START", {"messageId": "m1"})
+
+        async with store._engine.connect() as conn:
+            count = (await conn.execute(
+                text("SELECT COUNT(*) FROM agui_events WHERE run_id = :rid"), {"rid": "run-1"},
+            )).scalar()
+            assert count == 0  # still buffered
+
+        await store.flush_events("run-1")
+
+        async with store._engine.connect() as conn:
+            count = (await conn.execute(
+                text("SELECT COUNT(*) FROM agui_events WHERE run_id = :rid"), {"rid": "run-1"},
+            )).scalar()
+            assert count == 2
+            # No agui_runs row was ever created for this run — flush_events must not
+            # require or create one.
+            runs_count = (await conn.execute(
+                text("SELECT COUNT(*) FROM agui_runs WHERE run_id = :rid"), {"rid": "run-1"},
+            )).scalar()
+            assert runs_count == 0
+    finally:
+        await store.close()
+
+
+@pytest.mark.asyncio
+async def test_flush_events_is_a_noop_when_nothing_buffered():
+    store = mem_store()
+    await store.initialize()
+    try:
+        await store.flush_events("never-seen-run")  # must not raise
+    finally:
+        await store.close()
+
+
+@pytest.mark.asyncio
+async def test_flush_events_waits_for_inflight_batch():
+    """A second flush_events call must wait for an already-in-flight background
+    batch (triggered by a first, concurrent flush_events call) to commit, rather
+    than racing it or returning before the events are actually durable."""
+    store = mem_store(event_flush_interval=10)
+    await store.initialize()
+    try:
+        started = asyncio.Event()
+        release = asyncio.Event()
+        original_flush_batch = store._flush_batch
+
+        async def controlled_flush(batch):
+            started.set()
+            await release.wait()
+            await original_flush_batch(batch)
+
+        store._flush_batch = controlled_flush
+
+        await store.put_event("run-1", "thread-1", 0, "RUN_STARTED", {})
+
+        first_flush = asyncio.create_task(store.flush_events("run-1"))
+        await started.wait()  # background flusher has taken ownership of the batch
+
+        second_flush = asyncio.create_task(store.flush_events("run-1"))
+        await asyncio.sleep(0)
+        assert not first_flush.done()
+        assert not second_flush.done()
+
+        release.set()
+        await first_flush
+        await second_flush
+
+        async with store._engine.connect() as conn:
+            count = (await conn.execute(
+                text("SELECT COUNT(*) FROM agui_events WHERE run_id = :rid"), {"rid": "run-1"},
+            )).scalar()
+            assert count == 1
     finally:
         await store.close()

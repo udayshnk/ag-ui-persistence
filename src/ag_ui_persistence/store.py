@@ -58,7 +58,8 @@ CREATE TABLE IF NOT EXISTS agui_runs (
 );
 
 CREATE TABLE IF NOT EXISTS agui_events (
-    run_id      TEXT NOT NULL REFERENCES agui_runs(run_id) ON DELETE CASCADE,
+    run_id      TEXT NOT NULL,
+    thread_id   TEXT NOT NULL,
     seq         INTEGER NOT NULL,
     event_type  TEXT NOT NULL,
     data        TEXT NOT NULL,
@@ -70,6 +71,7 @@ CREATE TABLE IF NOT EXISTS agui_events (
 CREATE INDEX IF NOT EXISTS idx_agui_threads_ns   ON agui_threads(namespace, updated_at);
 CREATE INDEX IF NOT EXISTS idx_agui_runs_thread  ON agui_runs(thread_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_agui_runs_parent  ON agui_runs(parent_run_id);
+CREATE INDEX IF NOT EXISTS idx_agui_events_thread ON agui_events(thread_id);
 """
 
 _TERMINAL_RUN_STATUSES = {"completed", "error"}
@@ -78,6 +80,7 @@ _TERMINAL_RUN_STATUSES = {"completed", "error"}
 @dataclass(slots=True)
 class _BufferedEvent:
     run_id: str
+    thread_id: str
     seq: int
     event_type: str
     data_json: str
@@ -257,6 +260,7 @@ class AGUIPersistence:
     async def put_event(
         self,
         run_id: str,
+        thread_id: str,
         seq: int,
         event_type: str,
         data: dict,
@@ -267,12 +271,13 @@ class AGUIPersistence:
             async with self._engine.begin() as conn:
                 await conn.execute(
                     text(
-                        "INSERT INTO agui_events (run_id, seq, event_type, data, started_at, ended_at) "
-                        "VALUES (:rid, :seq, :etype, :data, :now, :now) "
+                        "INSERT INTO agui_events (run_id, thread_id, seq, event_type, data, started_at, ended_at) "
+                        "VALUES (:rid, :tid, :seq, :etype, :data, :now, :now) "
                         "ON CONFLICT (run_id, seq) DO NOTHING"
                     ),
                     {
                         "rid": run_id,
+                        "tid": thread_id,
                         "seq": seq,
                         "etype": event_type,
                         "data": json.dumps(data),
@@ -282,6 +287,7 @@ class AGUIPersistence:
             return
         event = _BufferedEvent(
             run_id=run_id,
+            thread_id=thread_id,
             seq=seq,
             event_type=event_type,
             data_json=json.dumps(data),
@@ -330,6 +336,20 @@ class AGUIPersistence:
                 ),
                 {"rid": run_id, "now": now},
             )
+
+    async def flush_events(self, run_id: str) -> None:
+        """Flush all buffered events for run_id to agui_events, waiting until committed.
+
+        Unlike update_run(), never touches agui_runs/agui_threads — for callers that
+        track run status/metadata in their own store and use this library only for
+        the event stream. Delegates to the same request-and-wait machinery
+        get_events() already uses to force a flush (_flush_run/_ensure_flusher_locked/
+        _flush_batch), so an in-flight background batch is waited on rather than
+        raced against, and flush_waiters/_prune_run_state_locked are handled by that
+        existing path.
+        """
+        if self._enable_event_buffering:
+            await self._flush_run(run_id)
 
     # ------------------------------------------------------------------
     # Read — progressive history retrieval
@@ -530,7 +550,16 @@ class AGUIPersistence:
             )
 
     async def delete_thread(self, thread_id: str, namespace: Optional[str] = None) -> bool:
-        """Delete a thread and all its runs and events. Returns True if found and deleted."""
+        """Delete a thread and all its runs and events. Returns True if anything was deleted.
+
+        agui_events no longer has a foreign key to agui_runs, so it's no longer covered
+        by the agui_threads -> agui_runs -> agui_events cascade — deleted explicitly here,
+        directly by thread_id, with no sub-select through agui_runs. This delete always
+        runs, independent of whether a matching agui_threads row exists: a caller that
+        never writes to agui_threads/agui_runs at all (event-stream-only usage) would
+        otherwise always see rowcount 0 there and this method would silently skip
+        deleting that thread's events on every call.
+        """
         self._ensure_open()
         if self._enable_event_buffering:
             run_ids = await self._get_thread_run_ids(thread_id, namespace)
@@ -546,7 +575,11 @@ class AGUIPersistence:
                 text(query),
                 params,
             )
-        return result.rowcount > 0
+            events_result = await conn.execute(
+                text("DELETE FROM agui_events WHERE thread_id = :tid"),
+                {"tid": thread_id},
+            )
+        return result.rowcount > 0 or events_result.rowcount > 0
 
     async def get_events(self, run_id: str, namespace: Optional[str] = None) -> list[Event]:
         self._ensure_open()
@@ -645,7 +678,7 @@ class AGUIPersistence:
             events = self._do_merge_delta_events(state.pending_events) if self._merge_delta_events else list(state.pending_events)
             rows = [
                 {
-                    "rid": e.run_id, "seq": e.seq, "etype": e.event_type,
+                    "rid": e.run_id, "tid": e.thread_id, "seq": e.seq, "etype": e.event_type,
                     "data": e.data_json, "started_at": e.started_at, "ended_at": e.ended_at,
                 }
                 for e in events
@@ -655,8 +688,8 @@ class AGUIPersistence:
                 if rows:
                     await conn.execute(
                         text(
-                            "INSERT INTO agui_events (run_id, seq, event_type, data, started_at, ended_at) "
-                            "VALUES (:rid, :seq, :etype, :data, :started_at, :ended_at) "
+                            "INSERT INTO agui_events (run_id, thread_id, seq, event_type, data, started_at, ended_at) "
+                            "VALUES (:rid, :tid, :seq, :etype, :data, :started_at, :ended_at) "
                             "ON CONFLICT (run_id, seq) DO NOTHING"
                         ),
                         rows,
@@ -859,7 +892,7 @@ class AGUIPersistence:
                 if key is not None:
                     # Start a new carry (copy so we don't mutate the original batch event)
                     carry = _BufferedEvent(
-                        run_id=event.run_id, seq=event.seq, event_type=event.event_type,
+                        run_id=event.run_id, thread_id=event.thread_id, seq=event.seq, event_type=event.event_type,
                         data_json=event.data_json, started_at=event.started_at,
                         ended_at=event.ended_at, token=event.token, enqueued_at=event.enqueued_at,
                     )
@@ -936,13 +969,13 @@ class AGUIPersistence:
                         events = self._do_merge_delta_events(events)
                         events = await self._extend_db_carry(conn, run_id, events)
                         rows.extend(
-                            {"rid": e.run_id, "seq": e.seq, "etype": e.event_type,
+                            {"rid": e.run_id, "tid": e.thread_id, "seq": e.seq, "etype": e.event_type,
                              "data": e.data_json, "started_at": e.started_at, "ended_at": e.ended_at}
                             for e in events
                         )
                 else:
                     rows = [
-                        {"rid": e.run_id, "seq": e.seq, "etype": e.event_type,
+                        {"rid": e.run_id, "tid": e.thread_id, "seq": e.seq, "etype": e.event_type,
                          "data": e.data_json, "started_at": e.started_at, "ended_at": e.ended_at}
                         for events in batch.values()
                         for e in events
@@ -950,8 +983,8 @@ class AGUIPersistence:
                 if rows:
                     await conn.execute(
                         text(
-                            "INSERT INTO agui_events (run_id, seq, event_type, data, started_at, ended_at) "
-                            "VALUES (:rid, :seq, :etype, :data, :started_at, :ended_at) "
+                            "INSERT INTO agui_events (run_id, thread_id, seq, event_type, data, started_at, ended_at) "
+                            "VALUES (:rid, :tid, :seq, :etype, :data, :started_at, :ended_at) "
                             "ON CONFLICT (run_id, seq) DO NOTHING"
                         ),
                         rows,

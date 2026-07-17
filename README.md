@@ -29,9 +29,9 @@ store = AGUIPersistence(PersistenceConfig(db_url="sqlite:///agui.db"))
 await store.initialize()  # creates tables
 
 # During a live agent run
-await store.put_run(thread_id="t1", run_id="r1", parent_run_id=None, title="User request")
-await store.put_event(run_id="r1", seq=0, event_type="RUN_STARTED", data={})
-await store.put_event(run_id="r1", seq=1, event_type="TEXT_MESSAGE_START", data={"message_id": "m1"})
+await store.put_run(thread_id="t1", run_id="r1", parent_run_id=None, run_input={"text": "Hello"}, title="User request")
+await store.put_event(run_id="r1", thread_id="t1", seq=0, event_type="RUN_STARTED", data={})
+await store.put_event(run_id="r1", thread_id="t1", seq=1, event_type="TEXT_MESSAGE_START", data={"message_id": "m1"})
 await store.update_run(run_id="r1", status="completed", summary="Done")
 
 # Reading history — walk backwards via linked list
@@ -42,7 +42,7 @@ while run:
     run = await store.get_run(run.previous_run_id) if run.previous_run_id else None
 
 # Child (sub-agent) runs
-await store.put_run(thread_id="t1", run_id="r1-sub", parent_run_id="r1")
+await store.put_run(thread_id="t1", run_id="r1-sub", parent_run_id="r1", run_input={"text": "Sub-task"})
 child_runs = await store.get_runs(thread_id="t1", parent_run_id="r1")
 
 await store.close()
@@ -74,9 +74,9 @@ This is useful when you want atomic, all-or-nothing event persistence — e.g. o
 store = AGUIPersistence(PersistenceConfig(db_url="sqlite:///agui.db", persist_on_completion=True))
 await store.initialize()
 
-await store.put_run("t1", "r1", parent_run_id=None)
-await store.put_event("r1", 0, "RUN_STARTED", {})
-await store.put_event("r1", 1, "TEXT_MESSAGE_CONTENT", {"messageId": "m1", "delta": "Hello"})
+await store.put_run("t1", "r1", parent_run_id=None, run_input={"text": "Hello"})
+await store.put_event("r1", "t1", 0, "RUN_STARTED", {})
+await store.put_event("r1", "t1", 1, "TEXT_MESSAGE_CONTENT", {"messageId": "m1", "delta": "Hello"})
 
 events = await store.get_events("r1")  # [] — not written yet
 
@@ -98,10 +98,10 @@ The merged row keeps the `seq` of the first delta in the group. `started_at` com
 store = AGUIPersistence(PersistenceConfig(db_url="sqlite:///agui.db", merge_delta_events=True))
 await store.initialize()
 
-await store.put_run("t1", "r1", parent_run_id=None)
-await store.put_event("r1", 0, "TEXT_MESSAGE_CONTENT", {"messageId": "m1", "delta": "Hello"})
-await store.put_event("r1", 1, "TEXT_MESSAGE_CONTENT", {"messageId": "m1", "delta": ", "})
-await store.put_event("r1", 2, "TEXT_MESSAGE_CONTENT", {"messageId": "m1", "delta": "world"})
+await store.put_run("t1", "r1", parent_run_id=None, run_input={"text": "Hello"})
+await store.put_event("r1", "t1", 0, "TEXT_MESSAGE_CONTENT", {"messageId": "m1", "delta": "Hello"})
+await store.put_event("r1", "t1", 1, "TEXT_MESSAGE_CONTENT", {"messageId": "m1", "delta": ", "})
+await store.put_event("r1", "t1", 2, "TEXT_MESSAGE_CONTENT", {"messageId": "m1", "delta": "world"})
 
 events = await store.get_events("r1")
 # [Event(seq=0, event_type="TEXT_MESSAGE_CONTENT", data={"messageId": "m1", "delta": "Hello, world"})]
@@ -126,9 +126,10 @@ When `enable_event_buffering=False`, `put_event()` writes directly to the databa
 | Method | Description |
 |---|---|
 | `initialize()` | Create tables (idempotent) |
-| `put_run(thread_id, run_id, parent_run_id, title?, status?, namespace?)` | Upsert thread + insert run; maintains `latest_run_id` / `previous_run_id` linked list for top-level runs |
-| `put_event(run_id, seq, event_type, data)` | Buffer one event for batched persistence (duplicate-safe on flush) |
+| `put_run(thread_id, run_id, parent_run_id, run_input, title?, agent_id?, status?, namespace?)` | Upsert thread + insert run; maintains `latest_run_id` / `previous_run_id` linked list for top-level runs |
+| `put_event(run_id, thread_id, seq, event_type, data)` | Buffer one event for batched persistence (duplicate-safe on flush). `run_id` has no foreign key to a run record — an event can be written for a run this library was never told about |
 | `update_run(run_id, status, summary?)` | Update run status and optional summary; triggers event flush for terminal statuses |
+| `flush_events(run_id)` | Flush this run's buffered events to the database and wait until committed, without touching run/thread status — for callers that track run metadata elsewhere and use this library purely for the event stream |
 | `close()` | Flush pending events and dispose the engine |
 
 #### Read

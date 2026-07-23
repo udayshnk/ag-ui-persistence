@@ -163,3 +163,25 @@ async def test_agui_persistence_initialize_is_noop_after_run_migrations(tmp_path
     threads = await store.get_threads()
     assert len(threads) == 1
     await store.close()
+
+
+@pytest.mark.asyncio
+async def test_run_migrations_url_with_percent_character(tmp_path):
+    """Regression: a stage deployment's DB password contained '!*##', which
+    render_as_string() percent-encodes into the URL (e.g. '%21%2A'). Passing that
+    URL through Config.set_main_option() routes through configparser's set(), which
+    applies '%'-interpolation by default and raises ValueError on a bare '%XX'
+    sequence — a real production startup failure this caused. _migration_runner.py
+    and env.py now read the URL from an env var instead, never through configparser,
+    so this must succeed regardless of how the '%' character got into the URL.
+    Reproduced here via a '%' in the file path itself, since SQLite URLs have no
+    username/password component to attach a real password to.
+    """
+    db_path = tmp_path / "db%2Fwith%21percent.db"
+    run_migrations(f"sqlite+aiosqlite:///{db_path}")
+
+    engine = create_async_engine(f"sqlite+aiosqlite:///{db_path}")
+    try:
+        assert await _table_exists(engine, "agui_threads")
+    finally:
+        await engine.dispose()

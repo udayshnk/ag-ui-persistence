@@ -142,7 +142,17 @@ class AGUIPersistence:
         self._closed = False
 
     async def initialize(self) -> None:
-        """Create tables if they don't exist."""
+        """Create tables if they don't exist.
+
+        Only ever creates a fresh schema — never patches an existing one forward.
+        If this database might already exist in an older shape (e.g. previously
+        managed by a host application's own migrations, or created by an earlier
+        version of this library), call run_migrations(url) first. initialize() is
+        the right choice on its own for a brand-new database, including ephemeral
+        ones like sqlite:///:memory: that run_migrations() cannot reach (it always
+        opens its own separate connection, and a second connection to :memory: is
+        a distinct, empty database).
+        """
         self._ensure_open()
         # SQLite disables foreign keys by default — enable them on every connection.
         if "sqlite" in str(self._engine.url):

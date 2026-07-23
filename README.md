@@ -19,6 +19,25 @@ Async Python library for persisting [AG-UI protocol](https://github.com/ag-ui-pr
 pip install ag-ui-persistence
 ```
 
+## Migrations
+
+For a **new, ephemeral database** (a fresh file, or `sqlite:///:memory:`), `initialize()` alone is enough — it creates every table fresh.
+
+For a database that **might already exist** in an older shape (e.g. one previously managed by a host application's own Alembic migrations, or created by an earlier version of this library), call `run_migrations()` first. `initialize()`'s own `CREATE TABLE IF NOT EXISTS` DDL never patches an existing table forward — it only ever creates a schema from nothing, so a pre-existing database left to `initialize()` alone silently stays on its old shape forever.
+
+```python
+from ag_ui_persistence import run_migrations, AGUIPersistence, PersistenceConfig
+
+run_migrations("postgresql://user:pass@localhost/mydb")  # patch forward to head, if needed
+
+store = AGUIPersistence(PersistenceConfig(db_url="postgresql://user:pass@localhost/mydb"))
+await store.initialize()  # safe no-op once run_migrations() has already run
+```
+
+`run_migrations(url, username=None, password=None)` opens its own connection to the given URL (via a subprocess, to avoid an asyncio/psycopg3 conflict) — it is **not compatible with `sqlite:///:memory:`**, since a second connection to an in-memory SQLite database is a distinct, empty database, invisible to whatever connection your own engine holds. Use a real file path or Postgres; for `:memory:` or other fresh-only use, skip it and just call `initialize()`.
+
+Runs against a dedicated `ag_ui_persistence_alembic_version` table and is scoped to only ever touch `agui_threads`/`agui_runs`/`agui_events` — safe to call against the same database as a host application's own Alembic migrations.
+
 ## Usage
 
 ```python
@@ -26,7 +45,7 @@ from ag_ui_persistence import AGUIPersistence, PersistenceConfig
 
 store = AGUIPersistence(PersistenceConfig(db_url="sqlite:///agui.db"))
 # or: AGUIPersistence(PersistenceConfig(db_url="postgresql://user:pass@localhost/mydb"))
-await store.initialize()  # creates tables
+await store.initialize()  # creates tables (fresh only — see Migrations above for pre-existing DBs)
 
 # During a live agent run
 await store.put_run(thread_id="t1", run_id="r1", parent_run_id=None, run_input={"text": "Hello"}, title="User request")
@@ -109,6 +128,10 @@ events = await store.get_events("r1")
 
 ## API
 
+### `run_migrations(url, username=None, password=None)`
+
+Module-level function, not a method on `AGUIPersistence` — see [Migrations](#migrations) above for when it's needed and its `sqlite:///:memory:` limitation.
+
 ### `AGUIPersistence(config: PersistenceConfig)`
 
 All configuration — connection details and behaviour — is passed via a single `PersistenceConfig` dataclass.
@@ -125,7 +148,7 @@ When `enable_event_buffering=False`, `put_event()` writes directly to the databa
 
 | Method | Description |
 |---|---|
-| `initialize()` | Create tables (idempotent) |
+| `initialize()` | Create tables (idempotent, fresh-only — see [Migrations](#migrations)) |
 | `put_run(thread_id, run_id, parent_run_id, run_input, title?, agent_id?, status?, namespace?)` | Upsert thread + insert run; maintains `latest_run_id` / `previous_run_id` linked list for top-level runs |
 | `put_event(run_id, thread_id, seq, event_type, data)` | Buffer one event for batched persistence (duplicate-safe on flush). `run_id` has no foreign key to a run record — an event can be written for a run this library was never told about |
 | `update_run(run_id, status, summary?)` | Update run status and optional summary; triggers event flush for terminal statuses |

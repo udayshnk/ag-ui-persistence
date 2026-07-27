@@ -1217,3 +1217,105 @@ async def test_flush_events_waits_for_inflight_batch():
             assert count == 1
     finally:
         await store.close()
+
+
+@pytest.mark.asyncio
+async def test_delete_run_deletes_events_and_agui_runs_row():
+    store = mem_store(event_flush_interval=10)
+    await store.initialize()
+    try:
+        await store.put_run("thread-1", "run-1", parent_run_id=None, run_input={"text": "test"})
+        await store.put_event("run-1", "thread-1", 0, "RUN_STARTED", {})
+        await store.flush_events("run-1")
+
+        assert await store.delete_run("run-1") is True
+
+        async with store._engine.connect() as conn:
+            events_count = (await conn.execute(
+                text("SELECT COUNT(*) FROM agui_events WHERE run_id = :rid"), {"rid": "run-1"},
+            )).scalar()
+            runs_count = (await conn.execute(
+                text("SELECT COUNT(*) FROM agui_runs WHERE run_id = :rid"), {"rid": "run-1"},
+            )).scalar()
+            assert events_count == 0
+            assert runs_count == 0
+    finally:
+        await store.close()
+
+
+@pytest.mark.asyncio
+async def test_delete_run_flushes_buffered_events_before_deleting():
+    """A run with events still sitting in the in-memory buffer (never explicitly flushed)
+    must have them flushed then deleted — not left to land in agui_events later via the
+    background flusher, after delete_run already returned."""
+    store = mem_store(event_flush_interval=10)
+    await store.initialize()
+    try:
+        await store.put_event("run-1", "thread-1", 0, "RUN_STARTED", {})
+
+        async with store._engine.connect() as conn:
+            count = (await conn.execute(
+                text("SELECT COUNT(*) FROM agui_events WHERE run_id = :rid"), {"rid": "run-1"},
+            )).scalar()
+            assert count == 0  # still buffered, sanity check
+
+        assert await store.delete_run("run-1") is True
+
+        async with store._engine.connect() as conn:
+            count = (await conn.execute(
+                text("SELECT COUNT(*) FROM agui_events WHERE run_id = :rid"), {"rid": "run-1"},
+            )).scalar()
+            assert count == 0  # flushed then deleted, not left to reappear later
+    finally:
+        await store.close()
+
+
+@pytest.mark.asyncio
+async def test_delete_run_returns_false_when_nothing_matches():
+    store = mem_store()
+    await store.initialize()
+    try:
+        assert await store.delete_run("never-seen-run") is False
+    finally:
+        await store.close()
+
+
+@pytest.mark.asyncio
+async def test_delete_run_does_not_affect_other_runs():
+    store = mem_store(event_flush_interval=10)
+    await store.initialize()
+    try:
+        await store.put_event("run-1", "thread-1", 0, "RUN_STARTED", {})
+        await store.put_event("run-2", "thread-1", 0, "RUN_STARTED", {})
+        await store.flush_events("run-1")
+        await store.flush_events("run-2")
+
+        await store.delete_run("run-1")
+
+        async with store._engine.connect() as conn:
+            remaining = (await conn.execute(
+                text("SELECT COUNT(*) FROM agui_events WHERE run_id = :rid"), {"rid": "run-2"},
+            )).scalar()
+            assert remaining == 1
+    finally:
+        await store.close()
+
+
+@pytest.mark.asyncio
+async def test_delete_run_does_not_touch_agui_threads_row():
+    """delete_run must never delete/alter the thread row a run belongs to — a thread holds
+    many runs, so deleting one run's data must leave agui_threads untouched."""
+    store = mem_store(event_flush_interval=10)
+    await store.initialize()
+    try:
+        await store.put_run("thread-1", "run-1", parent_run_id=None, run_input={"text": "test"})
+
+        await store.delete_run("run-1")
+
+        async with store._engine.connect() as conn:
+            count = (await conn.execute(
+                text("SELECT COUNT(*) FROM agui_threads WHERE thread_id = :tid"), {"tid": "thread-1"},
+            )).scalar()
+            assert count == 1
+    finally:
+        await store.close()

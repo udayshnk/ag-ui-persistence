@@ -591,6 +591,24 @@ class AGUIPersistence:
             )
         return result.rowcount > 0 or events_result.rowcount > 0
 
+    async def delete_run(self, run_id: str) -> bool:
+        """Delete a single run's agui_events and agui_runs rows (unlike delete_thread, which
+        deletes for a whole thread). agui_threads is untouched: an orphaned run can never be
+        a thread's latest_run_id, so there's no dangling reference to clear. The agui_runs
+        delete is a no-op for this app (event-stream-only), but harmless when nothing
+        matches. Returns True if anything was deleted.
+        """
+        self._ensure_open()
+        await self.flush_events(run_id)
+        async with self._engine.begin() as conn:
+            events_result = await conn.execute(
+                text("DELETE FROM agui_events WHERE run_id = :rid"), {"rid": run_id},
+            )
+            runs_result = await conn.execute(
+                text("DELETE FROM agui_runs WHERE run_id = :rid"), {"rid": run_id},
+            )
+        return events_result.rowcount > 0 or runs_result.rowcount > 0
+
     async def get_events(self, run_id: str, namespace: Optional[str] = None) -> list[Event]:
         self._ensure_open()
         if namespace is not None:
